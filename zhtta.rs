@@ -24,7 +24,8 @@ use std::comm::*;
 
 static PORT:    int = 4414;
 static IPV4_LOOPBACK: &'static str = "127.0.0.1";
-static mut visitor_count: uint = 0;
+static visitor_count: uint =0;
+
 
 struct sched_msg {
     stream: Option<std::rt::io::net::tcp::TcpStream>,
@@ -32,15 +33,18 @@ struct sched_msg {
 }
 
 fn main() {
+//   let mut visitor_count: uint=0;
     let req_vec: ~[sched_msg] = ~[];
     let shared_req_vec = arc::RWArc::new(req_vec);
     let add_vec = shared_req_vec.clone();
     let take_vec = shared_req_vec.clone();
-    
     let (port, chan) = stream();
     let chan = SharedChan::new(chan);
-    
-    // add file requests into queue.
+    let count_arc= arc::RWArc::new(visitor_count);    
+//    let add_count = count_arc.clone();  
+  //  let take_count = count_arc.clone();  
+	
+// add file requests into queue.
     do spawn {
         while(true) {
             do add_vec.write |vec| {
@@ -56,7 +60,6 @@ fn main() {
         while(true) {
             do take_vec.write |vec| {
                 let mut tf = (*vec).pop();
-                
                 match io::read_whole_file(tf.filepath) {
                     Ok(file_data) => {
                         tf.stream.write(file_data);
@@ -78,13 +81,17 @@ fn main() {
     //for stream in acceptor.incoming().take(10 as uint) {
     for stream in acceptor.incoming() {
         let stream = Cell::new(stream);
-        
-        // Start a new task to handle the connection
-        let child_chan = chan.clone();
-        do spawn {
-            unsafe {
-                visitor_count += 1;
-            }
+	let child_chan = chan.clone();
+	let write_count = count_arc.clone();        
+// Start a new task to handle the connection
+         do spawn {
+		do write_count.write |count| {
+		*count=*count+1;
+			}
+//		unsafe{
+//		visitor_count+=1;
+//			}
+            
             
             let mut stream = stream.take();
             let mut buf = [0, ..500];
@@ -109,7 +116,7 @@ fn main() {
                          <body>
                          <h1>Greetings, Krusty!</h1>
                          <h2>Visitor count: %u</h2>
-                         </body></html>\r\n", unsafe{visitor_count});
+                         </body></html>\r\n", do write_count.read |count|{*count});//do count_arc.read|count|{*count});
 
                     stream.write(response.as_bytes());
                 }
