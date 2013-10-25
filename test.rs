@@ -22,6 +22,9 @@ use std::{os, str, io};
 use extra::arc;
 use std::comm::*;
 
+use std::str;
+use std::uint;
+
 static PORT:    int = 4414;
 static IP: &'static str = "127.0.0.1";
 static visitor_count: uint = 0;
@@ -82,9 +85,14 @@ fn main() {
                                            None => { println(fmt!("Error: Invalid IP address <%s>", IP));
                                                      return;},
                                          };
-                                         
+	//let ip_split=split_iter(ip, ".");
+        //let req_group : ~[&str]= request_str.splitn_iter(' ', ).collect();	
+       
+	// let ip_split= ~[&str] = ip.splitn_itr('.',4).collect();   
+
+ 	//println(fmt!("firstip %?",ip_split[0])                            
     let socket = net::tcp::TcpListener::bind(SocketAddr {ip: ip, port: PORT as u16});
-    
+  
     println(fmt!("Listening on %s:%d ...", ip.to_str(), PORT));
     let mut acceptor = socket.listen().unwrap();
     
@@ -136,6 +144,13 @@ fn main() {
                     let (sm_port, sm_chan) = std::comm::stream();
                     sm_chan.send(msg);
                     
+	
+	 		//let ip_split= *ip.to_str().split_str_itr('.',4).collect();   
+			let ip_str = ip.to_str();
+			let mut ip_split=ip_str.split_str_iter(".");
+			//let loc  = ip_split.nth(1).get();
+			//println(fmt!("firstip %?",ip_split[0]));  
+	
                     do child_add_vec.write |vec| {
                         let msg = sm_port.recv();
                         (*vec).push(msg); // enqueue new request.
