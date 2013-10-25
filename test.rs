@@ -26,6 +26,10 @@ static PORT:    int = 4414;
 static IP: &'static str = "127.0.0.1";
 static visitor_count: uint = 0;
 
+fn ip_parser()->bool{
+	return true;
+}
+
 struct sched_msg {
     stream: Option<std::rt::io::net::tcp::TcpStream>,
     filepath: ~std::path::PosixPath
@@ -36,6 +40,11 @@ fn main() {
     let shared_req_vec = arc::RWArc::new(req_vec);
     let add_vec = shared_req_vec.clone();
     let take_vec = shared_req_vec.clone();
+
+	let req_pvec: ~[sched_msg] = ~[];
+    let shared_req_pvec = arc::RWArc::new(req_pvec);
+    let add_pvec = shared_req_pvec.clone();
+    let take_pvec = shared_req_pvec.clone();
     
     let (port, chan) = stream();
     let chan = SharedChan::new(chan);
@@ -66,15 +75,30 @@ fn main() {
         
         loop {
             port.recv(); // wait for arrving notification
+			if(do take_pvec.read |vec| {vec.len()} > 0){
+				do take_pvec.write |pvec| {
+		            if ((*pvec).len() > 0) {
+		                // LIFO didn't make sense in service scheduling, so we modify it as FIFO by using shift_opt() rather than pop().
+		                let tf_opt: Option<sched_msg> = (*pvec).shift_opt();
+		                let tf = tf_opt.unwrap();
+		                println(fmt!("shift from queue, size: %ud", (*pvec).len()));
+		                sm_chan.send(tf); // send the request to send-response-task to serve.
+		            }	
+				}
+			
+			} else {
+
+			
             do take_vec.write |vec| {
-                if ((*vec).len() > 0) {
-                    // LIFO didn't make sense in service scheduling, so we modify it as FIFO by using shift_opt() rather than pop().
-                    let tf_opt: Option<sched_msg> = (*vec).shift_opt();
-                    let tf = tf_opt.unwrap();
-                    println(fmt!("shift from queue, size: %ud", (*vec).len()));
-                    sm_chan.send(tf); // send the request to send-response-task to serve.
-                }
-            }
+		            if ((*vec).len() > 0) {
+		                // LIFO didn't make sense in service scheduling, so we modify it as FIFO by using shift_opt() rather than pop().
+		                let tf_opt: Option<sched_msg> = (*vec).shift_opt();
+		                let tf = tf_opt.unwrap();
+		                println(fmt!("shift from queue, size: %ud", (*vec).len()));
+		                sm_chan.send(tf); // send the request to send-response-task to serve.
+		            }
+		        }
+			}
         }
     }
 
@@ -94,11 +118,13 @@ fn main() {
         // Start a new task to handle the each connection
         let child_chan = chan.clone();
         let child_add_vec = add_vec.clone();
-	let write_count = count_arc.clone();
+		let child_add_pvec = add_pvec.clone();
+
+		let write_count = count_arc.clone();
         do spawn {
-	do write_count.write |count| {
-		*count=*count+1;
-			}
+	    	do write_count.write |count| {
+				*count=*count+1;
+	    	}
             /*unsafe {
                 visitor_count += 1;
             }*/
@@ -135,12 +161,21 @@ fn main() {
                     let msg: sched_msg = sched_msg{stream: stream, filepath: file_path.clone()};
                     let (sm_port, sm_chan) = std::comm::stream();
                     sm_chan.send(msg);
-                    
-                    do child_add_vec.write |vec| {
-                        let msg = sm_port.recv();
-                        (*vec).push(msg); // enqueue new request.
-                        println("add to queue");
-                    }
+		    		
+					if(ip_parser()){
+						do child_add_pvec.write |pvec| {
+		                    let msg = sm_port.recv();
+		                    (*pvec).push(msg); // enqueue new request.
+		                    println("add to priority queue");
+		                }
+					} else {
+
+		                do child_add_vec.write |vec| {
+		                    let msg = sm_port.recv();
+		                    (*vec).push(msg); // enqueue new request.
+		                    println("add to queue");
+		                }
+					}
                     child_chan.send(""); //notify the new arriving request.
                     println(fmt!("get file request: %?", file_path));
                 }
