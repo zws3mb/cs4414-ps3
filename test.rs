@@ -25,7 +25,6 @@ use std::comm::*;
 static PORT:    int = 4414;
 static IP: &'static str = "127.0.0.1";
 static visitor_count: uint = 0;
-
 fn ip_parser(ip : ~str)->bool{
 	
 	let ip_str = ip.to_str();
@@ -130,10 +129,10 @@ fn main() {
         // Start a new task to handle the each connection
         let child_chan = chan.clone();
         let child_add_vec = add_vec.clone();
-                let child_add_pvec = add_pvec.clone();
-
-                let write_count = count_arc.clone();
-        do spawn {
+        let child_add_pvec = add_pvec.clone();
+	let write_count = count_arc.clone();
+        
+	do spawn {
                     do write_count.write |count| {
                                 *count=*count+1;
                     }
@@ -141,10 +140,10 @@ fn main() {
                 visitor_count += 1;
             }*/
             
-            let mut stream = stream.take();
             let mut buf = [0, ..500];
-            stream.read(buf);
-            let request_str = str::from_utf8(buf);
+            stream.take().read(buf);
+            
+	    let request_str = str::from_utf8(buf);
             
             let req_group : ~[&str]= request_str.splitn_iter(' ', 3).collect();
             if req_group.len() > 2 {
@@ -166,36 +165,52 @@ fn main() {
                          <h2>Visitor count: %u</h2>
                          </body></html>\r\n", do write_count.read |count|{*count});
 
-                      ip_parser(ip.to_str());
-											
+									
 					
-                    stream.write(response.as_bytes());
-                }
+                    stream.take().write(response.as_bytes());
+                }//end file req if
                 else {
                     // Requests scheduling
-                    let msg: sched_msg = sched_msg{stream: stream, filepath: file_path.clone()};
+                    
+		//let mut ip_stream = Cell::new(stream);
+//let mut iptemp=~"";		
+
+//println(iptemp);
+		let msg: sched_msg = sched_msg{stream: stream.take(), 				filepath: file_path.clone()};
+		    
                     let (sm_port, sm_chan) = std::comm::stream();
                     sm_chan.send(msg);
-
-                                        if(ip_parser(ip.to_str())){
-                                                do child_add_pvec.write |pvec| {
+		let mut soption =stream.take();			
+ 	
+		match soption{
+		Some(ref mut s)=>{
+			match s.peer_name(){
+					Some(pn)=>{
+				if(ip_parser(pn.to_str())){
+                                                do 					child_add_pvec.write |pvec| {
                                     let msg = sm_port.recv();
                                     (*pvec).push(msg); // enqueue new request.
                                     println("add to priority queue");
-                                }
-                                        } else {
+                                        }//end do
+				}//end if 
+				else {
+	                             
+        	                        do child_add_vec.write |vec| {
+        		                      let msg = sm_port.recv();
+                        	           (*vec).push(msg); // enqueue new request.
+                                	    println("add to queue");
+                                	}//end do
+                                }//end else
 
-                                do child_add_vec.write |vec| {
-                                    let msg = sm_port.recv();
-                                    (*vec).push(msg); // enqueue new request.
-                                    println("add to queue");
-                                }
-                                        }
-                    child_chan.send(""); //notify the new arriving request.
-                    println(fmt!("get file request: %?", file_path));
-                }
-            }
+                    		child_chan.send(""); //notify the new arriving request.
+                		    println(fmt!("get file request: %?", file_path));       
+					}None => ()}; //end peer name match
+			}, 	//end some(stream)
+		None => ()
+			}//end match
+		}//end file req else
+            }//end array long enough
             println!("connection terminates")
-        }
-    }
-}
+        }//end spawn
+    }//end for stream : acceptor
+}//end main
