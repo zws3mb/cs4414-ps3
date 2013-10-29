@@ -30,6 +30,8 @@ use std::rt::io::file::{FileInfo, FileReader};
 static PORT:    int = 4414;
 static IP: &'static str = "127.0.0.1";
 static visitor_count: uint = 0;
+//static map: hashmap::HashMap<~str, ~str> = hashmap::HashMap::new();
+
 fn ip_parser(ip : ~str)->bool{
 	println("Inside function: "+ip);
 	let ip_str = ip.to_str();
@@ -63,15 +65,15 @@ fn main() {
     let (port, chan) = stream();
     let chan = SharedChan::new(chan);
     let count_arc= arc::RWArc::new(visitor_count);
-
-	
-	let mut map: hashmap::HashMap<~str, ~str> = hashmap::HashMap::new();
+	let map: hashmap::HashMap<~str, ~str> = hashmap::HashMap::new();
+	let map_arc=arc::RWArc::new(map);	
+//	let mut map: hashmap::HashMap<~str, ~str> = hashmap::HashMap::new();
 	
     // dequeue file requests, and send responses.
     // FIFO
     do spawn {
         let (sm_port, sm_chan) = stream();
-        
+        let edit_map = map_arc.clone();
         // a task for sending responses.
         do spawn {
             loop {
@@ -84,21 +86,31 @@ fn main() {
 			println(fmt!("modified time %?", tf.filepath.get_mtime().unwrap()));
                         println(fmt!("begin serving file [%?]", tf.filepath));
           
-		let ref filepath = tf.filepath;
-		let mut f = &Path(filepath.to_str());
-		if f.exists() {
-    			let mut reader = f.open_reader(Open);
-    			//let mut mem = [0u8, 8*64000];
-			let mut mem = [0, ..500]; // need to make sure buffer size is big enough but not too big
-    			reader.read(mem);	
+//
+let ref filepath = tf.filepath;
+let mut file_content=~"";
+let mut file_path = &Path(filepath.to_str());
+                    match io::read_whole_file_str(file_path) {
+                        Ok(file_data) => {
+                            println(fmt!("%?", file_data));
 
-		let file_str = str::from_utf8(mem);
-		println(fmt!("file content: %?", file_str));
+   				file_content=file_data;	
+			let file_cell = Cell::new(file_content);
+			do edit_map.write |map_edit|{
+			map_edit.find_or_insert(tf.filepath.to_str(),file_cell.take()); //need buf or something to add contents of file as value in map
+}	
+			
+	}
+                        Err(err) => {
+                            println(err);
+                        }
+                    }
 
-	//insert_or_update takes 3 params
-	//map.insert_or_update_with(tf.filepath.to_str(),file_str); //need buf or something to add contents of file as value in map
+
+
+
+	
 		
-		}
 
 		
 
@@ -165,6 +177,8 @@ fn main() {
         let child_add_vec = add_vec.clone();
         let child_add_pvec = add_pvec.clone();
 	let write_count = count_arc.clone();
+	
+	
         
 	do spawn {
                     do write_count.write |count| {
