@@ -26,6 +26,7 @@ use std::rt::io::buffered::*;
 use std::rt::io::support::PathLike;
 use std::path::Path;
 use std::rt::io::file::{FileInfo, FileReader};
+use std::tuple;
 
 static PORT:    int = 4414;
 static IP: &'static str = "127.0.0.1";
@@ -80,9 +81,23 @@ fn main() {
                 let mut tf: sched_msg = sm_port.recv(); // wait for the dequeued request to handle
                 match io::read_whole_file(tf.filepath) { // killed if file size is larger than memory size.
                     Ok(file_data) => {
-			println(fmt!("access time %?", tf.filepath.get_atime().unwrap()));
+			let atime=tf.filepath.get_atime();
+			let accessed =	match atime{
+					Some(access_time)=>{ 
+					println(fmt!("access time %?", access_time.first()));
+					},
+					None()=>{
+					}
+				};
+
+
+
+			//println(fmt!("access time %?", access_split[0]));
 			println(fmt!("created time %?", tf.filepath
 .get_ctime().unwrap()));
+			//let mtime_str=tf.filepath.get_mtime().unwrap().to_str();
+			//let modified_str = mtime_str.slice(1, mtime_str.len()-1);
+
 			println(fmt!("modified time %?", tf.filepath.get_mtime().unwrap()));
                         println(fmt!("begin serving file [%?]", tf.filepath));
           
@@ -96,8 +111,8 @@ let mut file_path = &Path(filepath.to_str());
 
    				file_content=file_data;	
 			let file_cell = Cell::new(file_content);
-			do edit_map.write |map_edit|{
-			map_edit.find_or_insert(tf.filepath.to_str(),file_cell.take()); //need buf or something to add contents of file as value in map
+			do edit_map.write |file_map|{
+			file_map.find_or_insert(tf.filepath.to_str(),file_cell.take()); //need buf or something to add contents of file as value in map
 }	
 			
 	}
