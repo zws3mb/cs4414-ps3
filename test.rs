@@ -26,7 +26,7 @@ static PORT:    int = 4414;
 static IP: &'static str = "127.0.0.1";
 static visitor_count: uint = 0;
 fn ip_parser(ip : ~str)->bool{
-	
+	println("Inside function: "+ip);
 	let ip_str = ip.to_str();
 	let mut ip_split: ~[&str]=ip_str.split_str_iter(".").collect();
 	if((ip_split[0]=="127" && ip_split[1]=="0") || (ip_split[0]=="128" && ip_split[1]=="143") || (ip_split[0]=="137" && ip_split[1]=="54")){
@@ -125,7 +125,7 @@ fn main() {
     
     for stream in acceptor.incoming() {
         let stream = Cell::new(stream);
-        
+
         // Start a new task to handle the each connection
         let child_chan = chan.clone();
         let child_add_vec = add_vec.clone();
@@ -139,10 +139,10 @@ fn main() {
             /*unsafe {
                 visitor_count += 1;
             }*/
-            
+        let mut dstream = stream.take();            
             let mut buf = [0, ..500];
-            stream.take().read(buf);
-            
+            dstream.read(buf);
+            let mut clostream = Cell::new(dstream);
 	    let request_str = str::from_utf8(buf);
             
             let req_group : ~[&str]= request_str.splitn_iter(' ', 3).collect();
@@ -163,30 +163,22 @@ fn main() {
                          <body>
                          <h1>Greetings, Krusty!</h1>
                          <h2>Visitor count: %u</h2>
-                         </body></html>\r\n", do write_count.read |count|{*count});
-
-									
-					
-                    stream.take().write(response.as_bytes());
+                         </body></html>\r\n", do write_count.read |count|{*count});				
+			println("response formulated");	
+                    clostream.take().write(response.as_bytes());
                 }//end file req if
                 else {
                     // Requests scheduling
-                    
-		//let mut ip_stream = Cell::new(stream);
-//let mut iptemp=~"";		
-
-//println(iptemp);
-		let msg: sched_msg = sched_msg{stream: stream.take(), 				filepath: file_path.clone()};
+                    println("not default");
+			
+		        let mut ostream = clostream.take().unwrap();
+			//let msgcell = Cell::new(ostream);
+			let mut matchstream = ostream.peer_name().unwrap().to_str(); //need the ip address of peer
+			let msg: sched_msg = sched_msg{stream:Some(ostream),filepath: file_path.clone()};//
 		    
-                    let (sm_port, sm_chan) = std::comm::stream();
+               	     let (sm_port, sm_chan) = std::comm::stream();
                     sm_chan.send(msg);
-		let mut soption =stream.take();			
- 	
-		match soption{
-		Some(ref mut s)=>{
-			match s.peer_name(){
-					Some(pn)=>{
-				if(ip_parser(pn.to_str())){
+				if(ip_parser(matchstream)){
                                                 do 					child_add_pvec.write |pvec| {
                                     let msg = sm_port.recv();
                                     (*pvec).push(msg); // enqueue new request.
@@ -204,10 +196,10 @@ fn main() {
 
                     		child_chan.send(""); //notify the new arriving request.
                 		    println(fmt!("get file request: %?", file_path));       
-					}None => ()}; //end peer name match
-			}, 	//end some(stream)
-		None => ()
-			}//end match
+					//}None => ()}; //end peer name match
+//			}, 	//end some(stream)
+//		None => ()
+//			}//end match
 		}//end file req else
             }//end array long enough
             println!("connection terminates")
