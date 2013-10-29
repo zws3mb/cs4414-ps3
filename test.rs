@@ -90,7 +90,14 @@ fn main() {
 					}
 				};
 
-
+			let mtime=tf.filepath.get_mtime();
+			let modified =	match mtime{
+					Some(modified_time)=>{ 
+					println(fmt!("modified time %?", modified_time.first()));
+					},
+					None()=>{
+					}
+				};
 
 			//println(fmt!("access time %?", access_split[0]));
 			println(fmt!("created time %?", tf.filepath
@@ -98,7 +105,7 @@ fn main() {
 			//let mtime_str=tf.filepath.get_mtime().unwrap().to_str();
 			//let modified_str = mtime_str.slice(1, mtime_str.len()-1);
 
-			println(fmt!("modified time %?", tf.filepath.get_mtime().unwrap()));
+			//println(fmt!("modified time %?", tf.filepath.get_mtime().unwrap()));
                         println(fmt!("begin serving file [%?]", tf.filepath));
           
 //
