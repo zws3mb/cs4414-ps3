@@ -23,6 +23,9 @@ use extra::arc;
 use std::comm::*;
 use std::hashmap;
 use std::rt::io::buffered::*;
+use std::rt::io::support::PathLike;
+use std::path::Path;
+use std::rt::io::file::{FileInfo, FileReader};
 
 static PORT:    int = 4414;
 static IP: &'static str = "127.0.0.1";
@@ -61,6 +64,7 @@ fn main() {
     let chan = SharedChan::new(chan);
     let count_arc= arc::RWArc::new(visitor_count);
 
+	
 	let mut map: hashmap::HashMap<~str, ~str> = hashmap::HashMap::new();
 	
     // dequeue file requests, and send responses.
@@ -80,9 +84,24 @@ fn main() {
 			println(fmt!("modified time %?", tf.filepath.get_mtime().unwrap()));
                         println(fmt!("begin serving file [%?]", tf.filepath));
           
-	           
-	//map.insert_or_update_with(tf.filepath.to_str(),); //need buf or something to add contents of file as value in map
-	
+		let ref filepath = tf.filepath;
+		let mut f = &Path(filepath.to_str());
+		if f.exists() {
+    			let mut reader = f.open_reader(Open);
+    			//let mut mem = [0u8, 8*64000];
+			let mut mem = [0, ..500]; // need to make sure buffer size is big enough but not too big
+    			reader.read(mem);	
+
+		let file_str = str::from_utf8(mem);
+		println(fmt!("file content: %?", file_str));
+
+	//insert_or_update takes 3 params
+	//map.insert_or_update_with(tf.filepath.to_str(),file_str); //need buf or something to add contents of file as value in map
+		
+		}
+
+		
+
 
 
   // A web server should always reply a HTTP header for any legal HTTP request.
