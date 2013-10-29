@@ -21,6 +21,8 @@ use std::cell::Cell;
 use std::{os, str, io};
 use extra::arc;
 use std::comm::*;
+use std::hashmap;
+use std::rt::io::buffered::*;
 
 static PORT:    int = 4414;
 static IP: &'static str = "127.0.0.1";
@@ -58,6 +60,9 @@ fn main() {
     let (port, chan) = stream();
     let chan = SharedChan::new(chan);
     let count_arc= arc::RWArc::new(visitor_count);
+
+	let mut map: hashmap::HashMap<~str, ~str> = hashmap::HashMap::new();
+	
     // dequeue file requests, and send responses.
     // FIFO
     do spawn {
@@ -69,8 +74,18 @@ fn main() {
                 let mut tf: sched_msg = sm_port.recv(); // wait for the dequeued request to handle
                 match io::read_whole_file(tf.filepath) { // killed if file size is larger than memory size.
                     Ok(file_data) => {
+			println(fmt!("access time %?", tf.filepath.get_atime().unwrap()));
+			println(fmt!("created time %?", tf.filepath
+.get_ctime().unwrap()));
+			println(fmt!("modified time %?", tf.filepath.get_mtime().unwrap()));
                         println(fmt!("begin serving file [%?]", tf.filepath));
-                        // A web server should always reply a HTTP header for any legal HTTP request.
+          
+	           
+	//map.insert_or_update_with(tf.filepath.to_str(),); //need buf or something to add contents of file as value in map
+	
+
+
+  // A web server should always reply a HTTP header for any legal HTTP request.
                         tf.stream.write("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream; charset=UTF-8\r\n\r\n".as_bytes());
                         tf.stream.write(file_data);
                         println(fmt!("finish file [%?]", tf.filepath));
