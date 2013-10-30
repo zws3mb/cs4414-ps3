@@ -110,36 +110,47 @@ fn main() {
         do spawn {
             loop {
                 let mut tf: sched_msg = sm_port.recv(); // wait for the dequeued request to handle
+
+		do edit_map.read |file_map|{
+			let content = file_map.find(&tf.filepath.to_str());
+			match content{
+				Some(file_content) =>{
+					println(fmt!("truth. this file is in the map. conent: %?", content.unwrap()));				
+				},
+				None()=>{}
+			};
+
+		
+		}
                 match io::read_whole_file(tf.filepath) { // killed if file size is larger than memory size.
                     Ok(file_data) => {
-			let atime=tf.filepath.get_atime();
-			let accessed =	match atime{
+	
+			/*let atime=tf.filepath.get_atime();
+			match atime{
 					Some(access_time)=>{ 
 					println(fmt!("access time %?", access_time.first()));
 					},
 					None()=>{
 					}
-				};
+				}; */
 
 			let mtime=tf.filepath.get_mtime();
-			let modified =	match mtime{
+			let mut m_time = 0;			
+			match mtime{
 					Some(modified_time)=>{ 
-					println(fmt!("modified time %?", modified_time.first()));
-					},
+					m_time=modified_time.first()
+					//println(fmt!("modified time %?", modified_time.first()));
+						},
 					None()=>{
 					}
 				};
-
-			//println(fmt!("access time %?", access_split[0]));
-			println(fmt!("created time %?", tf.filepath
-.get_ctime().unwrap()));
-			//let mtime_str=tf.filepath.get_mtime().unwrap().to_str();
-			//let modified_str = mtime_str.slice(1, mtime_str.len()-1);
-
-			//println(fmt!("modified time %?", tf.filepath.get_mtime().unwrap()));
-                        println(fmt!("begin serving file [%?]", tf.filepath));
+		
+		println(fmt!("modified time %?", m_time));
+				
+			
+			println(fmt!("begin serving file [%?]", tf.filepath));
           
-//
+
 let ref filepath = tf.filepath;
 let mut file_content=~"";
 let mut file_path = &Path(filepath.to_str());
@@ -151,7 +162,13 @@ let mut file_path = &Path(filepath.to_str());
 			let file_cell = Cell::new(file_content);
 			do edit_map.write |file_map|{
 			file_map.find_or_insert(tf.filepath.to_str(),file_cell.take()); //need buf or something to add contents of file as value in map
-}	
+			let stored_time = extra::time::get_time().sec;
+			/*do edit_map.read |file_map|{
+			println(fmt!("file content in cache: %?", file_map.get(&tf.filepath.to_str())));
+			};
+*/
+			println(fmt!("time stored %?", stored_time));
+			}	
 			
 	}
                         Err(err) => {
@@ -266,7 +283,7 @@ let mut file_path = &Path(filepath.to_str());
 							if(file_data.contains("<!--#exec cmd")){
 								let mut cmd: ~[&str]=file_data.split_str_iter("\"").collect();
 								println("gash command: "+cmd[1].to_owned());
-								//let gash_res: ~str = ::gash2::main(cmd[1].to_owned());
+								let gash_res: ~str = ::gash2::main(cmd[1].to_owned());
 								/*let mpipe = os::pipe();
 								let gash_res= ::gash2::handle_cmd(cmd[1],mpipe.in,mpipe.out,-1);
 								let breader = BytesReader(mpipe.out,0);
