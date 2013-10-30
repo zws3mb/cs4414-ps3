@@ -12,6 +12,8 @@
 // Weilin Xu and David Evans
 // Version 0.3
 
+//httperf --server localhost --port 4414 --uri ex.html --rate 150 --num-conn 27000 --num-call 1 --timeout 30
+
 extern mod extra;
 
 use std::rt::io::*;
@@ -21,6 +23,10 @@ use std::cell::Cell;
 use std::{os, str, io};
 use extra::arc;
 use std::comm::*;
+use std::str::*;
+use std::io::BytesReader;
+
+mod gash2;
 
 static PORT:    int = 4414;
 static IP: &'static str = "127.0.0.1";
@@ -151,7 +157,36 @@ fn main() {
                 println(fmt!("Request for path: \n%?", path));
                 
                 let file_path = ~os::getcwd().push(path.replace("/../", ""));
-                if !os::path_exists(file_path) || os::path_is_dir(file_path) {
+
+		//start gash SSI stuff here
+                if(file_path.to_str().contains(".shtml")){
+					println("HTML file with SSI detected");
+					println(fmt!("serve file: %?", file_path));
+                    match io::read_whole_file_str(file_path) {
+                        Ok(file_data) => {
+                            println(fmt!("%?", file_data));
+							if(file_data.contains("<!--#exec cmd")){
+								let mut cmd: ~[&str]=file_data.split_str_iter("\"").collect();
+								println("gash command: "+cmd[1].to_owned());
+								//let gash_res: ~str = ::gash2::main(cmd[1].to_owned());
+								/*let mpipe = os::pipe();
+								let gash_res= ::gash2::handle_cmd(cmd[1],mpipe.in,mpipe.out,-1);
+								let breader = BytesReader(mpipe.out,0);
+								while(!breader.eof()){
+									println(breader.read().from_bytes());
+								}*/
+								println("SSI here");
+								let mut response: ~str = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n"+ file_data;
+								response = replace(response,"<!--#exec cmd=\"ls\" -->","<p>"+gash_res+"</p>");
+								println(fmt!("%?", response));
+								clostream.take().write(response.as_bytes());
+							}
+                        }
+                        Err(err) => {
+                            println(err);
+                        }
+                    }
+			} else if !os::path_exists(file_path) || os::path_is_dir(file_path) {
                     println(fmt!("Request received:\n%s", request_str));
                     let response: ~str = fmt!(
                         "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n
@@ -177,9 +212,13 @@ fn main() {
 			let msg: sched_msg = sched_msg{stream:Some(ostream),filepath: file_path.clone()};//
 		    
                	     let (sm_port, sm_chan) = std::comm::stream();
+
+					let time = msg.filepath.get_atime().unwrap();
+                                        println(fmt!("%?",time));
+
                     sm_chan.send(msg);
 				if(ip_parser(matchstream)){
-                                                do 					child_add_pvec.write |pvec| {
+                                	do child_add_pvec.write |pvec| {
                                     let msg = sm_port.recv();
                                     (*pvec).push(msg); // enqueue new request.
                                     println("add to priority queue");
