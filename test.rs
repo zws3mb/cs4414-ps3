@@ -24,9 +24,17 @@ use std::comm::*;
 use std::cmp::*;
 use std::option::Option;
 use extra::priority_queue::*;
+use std::hashmap;
+use std::rt::io::buffered::*;
+use std::rt::io::support::PathLike;
+use std::path::Path;
+use std::rt::io::file::{FileInfo, FileReader};
+use std::tuple;
 static PORT:    int = 4414;
 static IP: &'static str = "127.0.0.1";
 static visitor_count: uint = 0;
+//static map: hashmap::HashMap<~str, ~str> = hashmap::HashMap::new();
+
 fn ip_parser(ip : ~str)->bool{
 	println("Inside function: "+ip);
 	let ip_str = ip.to_str();
@@ -82,19 +90,79 @@ fn main() {
     let (port, chan) = stream();
     let chan = SharedChan::new(chan);
     let count_arc= arc::RWArc::new(visitor_count);
+	let map: hashmap::HashMap<~str, ~str> = hashmap::HashMap::new();
+	let map_arc=arc::RWArc::new(map);	
+//	let mut map: hashmap::HashMap<~str, ~str> = hashmap::HashMap::new();
+	
     // dequeue file requests, and send responses.
     // FIFO
     do spawn {
         let (sm_port, sm_chan) = stream();
-        
+        let edit_map = map_arc.clone();
         // a task for sending responses.
         do spawn {
             loop {
                 let mut tf: sched_msg = sm_port.recv(); // wait for the dequeued request to handle
                 match io::read_whole_file(tf.filepath) { // killed if file size is larger than memory size.
                     Ok(file_data) => {
+			let atime=tf.filepath.get_atime();
+			let accessed =	match atime{
+					Some(access_time)=>{ 
+					println(fmt!("access time %?", access_time.first()));
+					},
+					None()=>{
+					}
+				};
+
+			let mtime=tf.filepath.get_mtime();
+			let modified =	match mtime{
+					Some(modified_time)=>{ 
+					println(fmt!("modified time %?", modified_time.first()));
+					},
+					None()=>{
+					}
+				};
+
+			//println(fmt!("access time %?", access_split[0]));
+			println(fmt!("created time %?", tf.filepath
+.get_ctime().unwrap()));
+			//let mtime_str=tf.filepath.get_mtime().unwrap().to_str();
+			//let modified_str = mtime_str.slice(1, mtime_str.len()-1);
+
+			//println(fmt!("modified time %?", tf.filepath.get_mtime().unwrap()));
                         println(fmt!("begin serving file [%?]", tf.filepath));
-                        // A web server should always reply a HTTP header for any legal HTTP request.
+          
+//
+let ref filepath = tf.filepath;
+let mut file_content=~"";
+let mut file_path = &Path(filepath.to_str());
+                    match io::read_whole_file_str(file_path) {
+                        Ok(file_data) => {
+                            println(fmt!("%?", file_data));
+
+   				file_content=file_data;	
+			let file_cell = Cell::new(file_content);
+			do edit_map.write |file_map|{
+			file_map.find_or_insert(tf.filepath.to_str(),file_cell.take()); //need buf or something to add contents of file as value in map
+}	
+			
+	}
+                        Err(err) => {
+                            println(err);
+                        }
+                    }
+
+
+
+
+	
+		
+
+		
+
+
+
+  // A web server should always reply a HTTP header for any legal HTTP request.
                         tf.stream.write("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream; charset=UTF-8\r\n\r\n".as_bytes());
                         tf.stream.write(file_data);
                         println(fmt!("finish file [%?]", tf.filepath));
@@ -158,6 +226,8 @@ fn main() {
         let child_add_vec = add_vec.clone();
 //        let child_add_pvec = add_pvec.clone();
 	let write_count = count_arc.clone();
+	
+	
         
 	do spawn {
                     do write_count.write |count| {
