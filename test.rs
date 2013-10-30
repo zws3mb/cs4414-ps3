@@ -25,11 +25,15 @@ use std::cmp::*;
 use std::option::Option;
 use extra::priority_queue::*;
 use std::hashmap;
+//use std::rt::io::pipe;
 use std::rt::io::buffered::*;
 use std::rt::io::support::PathLike;
 use std::path::Path;
-use std::rt::io::file::{FileInfo, FileReader};
-use std::tuple;
+//use std::rt::io::file::{FileInfo, FileReader};
+//use std::tuple;
+//use std::libc;
+mod gashk;
+
 static PORT:    int = 4414;
 static IP: &'static str = "127.0.0.1";
 static visitor_count: uint = 0;
@@ -101,6 +105,7 @@ fn main() {
 			let accessed =	match atime{
 					Some(access_time)=>{ 
 					println(fmt!("access time %?", access_time.first()));
+					access_time.first();					
 					},
 					None()=>{
 					}
@@ -110,6 +115,7 @@ fn main() {
 			let modified =	match mtime{
 					Some(modified_time)=>{ 
 					println(fmt!("modified time %?", modified_time.first()));
+					modified_time.first();
 					},
 					None()=>{
 					}
@@ -121,36 +127,42 @@ fn main() {
 			//let modified_str = mtime_str.slice(1, mtime_str.len()-1);
 			//println(fmt!("modified time %?", tf.filepath.get_mtime().unwrap()));
 	                //println(fmt!("begin serving file [%?]", tf.filepath));
-          
+          if(tf.filepath.to_str().contains("shtml")||modified<accessed){
+			match io::read_whole_file_str(tf.filepath){
+			Ok(file_strings)=>{			
+					
+//		let file_cell = Cell::new(file_strings);
+		//start gash SSI stuff here
+		
+			println("HTML file with SSI detected");
+			println(fmt!("serve file: %?", tf.filepath));
+
+			if(file_strings.contains("<!--#exec cmd")){
+				let cmd:~[&str]=file_strings.split_str_iter("\"").collect();//to be refined
+				println("gash command: " +cmd[1].to_owned());
+				let mpipe = os::pipe();
+				let popt = ::gashk::handle_cmdline(cmd[1]);
+				let out_bytes=popt.unwrap().output;
+				let s = str::from_utf8(out_bytes);
+				//let fread = std::io::BytesWriter
+				println(s);
+					}//end if contains
+		
 			let ref filepath = tf.filepath;
 			let mut file_content=~"";
-			let mut file_path = &Path(filepath.to_str());
-			println(fmt!("%?", file_data));
-			file_content=file_data;	
+			//let file_path = &Path(filepath.to_str());
+			println(fmt!("%?", file_strings));
+			file_content=file_strings.clone();	
 			let file_cell = Cell::new(file_content);
 			do edit_map.write |file_map|{
 			file_map.find_or_insert(tf.filepath.to_str(),file_cell.take()); //need buf or something to add contents of file as value in map
 			}	
-			println(fmt!("%?", file_data));
-			//end caching
-
-		//start gash SSI stuff here
-		if(file_path.to_str().contains("shtml")){
-			println("HTML file with SSI detected");
-			println(fmt!("serve file: %?", file_path));
-
-			if(file_data.contains("<!--#exec cmd")){
-				let mut cmd:~[&str]=file_data.split_str_iter("\"").collect();
-				println("gash command: " +cmd[1].to_owned());
-				let mpipe = os::pipe();
-				let gash_res=gash2::handle_cmd(cmd[1],mpipe.in,mpipe.out,-1);
-				let mreader =mem::MemReader::new(mpipe.out);
-				while(!mreader.eof()){
-					println(mreader.read());
-					}//end while
-				}//end if contains
-		}//shtml
-  
+			println(fmt!("%?", file_strings));
+			
+		},//Ok
+		Err(err)=>{println(err);}
+			}//match
+  			}//if modified or shtml, open as string
               tf.stream.write("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream; charset=UTF-8\r\n\r\n".as_bytes());
                         tf.stream.write(file_data);
                         println(fmt!("finish file [%?]", tf.filepath));
@@ -161,22 +173,20 @@ fn main() {
                     }//match           
  
         }//loop
+	}//spawn
         loop {
             port.recv(); 
             do take_vec.write |vec| {
                             if ((*vec).len() > 0) {
-                                // LIFO didn't make sense in service scheduling, so we modify it as FIFO by using shift_opt() rather than pop().
-                        let tf_opt: Option<sched_msg> = Some((*vec).pop());
-				//let tf = tf_opt.unwrap();
-                                //let tf = tf_opt.unwrap();
-                                println(fmt!("queue size: %ud", (*vec).len()));
-	let tf_cell=Cell::new(tf_opt.unwrap());
+                                let tf_opt: Option<sched_msg> = Some((*vec).pop());
+			        println(fmt!("queue size: %ud", (*vec).len()));
+				let tf_cell=Cell::new(tf_opt.unwrap());
                                 sm_chan.send(tf_cell.take()); // send the request to send-response-task to serve.
 			}//capacity
                             }//end write
 	               	
 			}//loop
-  		}//spawn
+  		
 }//spawn
 
     let ip = match FromStr::from_str(IP) { 
