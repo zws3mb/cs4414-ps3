@@ -21,14 +21,16 @@ use std::cell::Cell;
 use std::{os, str, io};
 use extra::arc;
 use std::comm::*;
-
+use std::cmp::*;
+use std::option::Option;
+use extra::priority_queue::*;
 static PORT:    int = 4414;
 static IP: &'static str = "127.0.0.1";
 static visitor_count: uint = 0;
 fn ip_parser(ip : ~str)->bool{
 	println("Inside function: "+ip);
 	let ip_str = ip.to_str();
-	let mut ip_split: ~[&str]=ip_str.split_str_iter(".").collect();
+	let ip_split: ~[&str]=ip_str.split_str_iter(".").collect();
 	if((ip_split[0]=="127" && ip_split[1]=="0") || (ip_split[0]=="128" && ip_split[1]=="143") || (ip_split[0]=="137" && ip_split[1]=="54")){
 
 		//println(fmt!("firstip %?",ip_split[0]));  
@@ -40,20 +42,42 @@ fn ip_parser(ip : ~str)->bool{
 }
 
 struct sched_msg {
-    stream: Option<std::rt::io::net::tcp::TcpStream>,
-    filepath: ~std::path::PosixPath
+     stream: Option<std::rt::io::net::tcp::TcpStream>,
+     filepath: ~std::path::PosixPath
+}
+impl Ord for sched_msg {
+	fn lt(&self, other:&sched_msg)->bool{
+let temp =other.stream.get_ref();
+let temp2 =self.stream.get_ref();
+unsafe{
+let ref ostreamip=std::cast::transmute_mut(temp).peer_name();
+let ref mystreamip=std::cast::transmute_mut(temp2).peer_name();
+
+if(!ip_parser(mystreamip.to_str()) && ip_parser(ostreamip.to_str())){
+false;
+}
+if(ip_parser(mystreamip.to_str()) && !ip_parser(ostreamip.to_str())){
+true;
+}
+if( ip_parser(mystreamip.to_str()) && ip_parser(ostreamip.to_str())){
+return (self.filepath.get_size().unwrap())<(other.filepath.get_size().unwrap());
+}
+}
+return false;
+}
 }
 
 fn main() {
     let req_vec: ~[sched_msg] = ~[];
-    let shared_req_vec = arc::RWArc::new(req_vec);
+    let req_queue: PriorityQueue<sched_msg> = PriorityQueue::from_vec(req_vec);
+    let shared_req_vec = arc::RWArc::new(req_queue);
     let add_vec = shared_req_vec.clone();
     let take_vec = shared_req_vec.clone();
 
-        let req_pvec: ~[sched_msg] = ~[];
-    let shared_req_pvec = arc::RWArc::new(req_pvec);
-    let add_pvec = shared_req_pvec.clone();
-    let take_pvec = shared_req_pvec.clone();
+//        let req_pvec: ~[sched_msg] = ~[];
+//    let shared_req_pvec = arc::RWArc::new(req_pvec);
+//    let add_pvec = shared_req_pvec.clone();
+//    let take_pvec = shared_req_pvec.clone();
     
     let (port, chan) = stream();
     let chan = SharedChan::new(chan);
@@ -84,7 +108,7 @@ fn main() {
         
         loop {
             port.recv(); // wait for arrving notification
-                        if(do take_pvec.read |vec| {vec.len()} > 0){
+                        /*if(do take_pvec.read |vec| {vec.len()} > 0){
                                 do take_pvec.write |pvec| {
                             if ((*pvec).len() > 0) {
                                 // LIFO didn't make sense in service scheduling, so we modify it as FIFO by using shift_opt() rather than pop().
@@ -97,17 +121,20 @@ fn main() {
                         
                         } else {
 
-                        
+                        */
             do take_vec.write |vec| {
-                            if ((*vec).len() > 0) {
+                            if ((*vec).capacity() > 0) {
                                 // LIFO didn't make sense in service scheduling, so we modify it as FIFO by using shift_opt() rather than pop().
-                                let tf_opt: Option<sched_msg> = (*vec).shift_opt();
-                                let tf = tf_opt.unwrap();
-                                println(fmt!("shift from queue, size: %ud", (*vec).len()));
-                                sm_chan.send(tf); // send the request to send-response-task to serve.
+                        let tf_opt: Option<sched_msg> = Some((*vec).pop());
+				//let tf = tf_opt.unwrap();
+                                //let tf = tf_opt.unwrap();
+                                println(fmt!("shift from queue, size: %ud", (*vec).capacity()));
+	let tf_cell=Cell::new(tf_opt.unwrap());
+                                sm_chan.send(tf_cell.take()); // send the request to send-response-task to serve.
                             }
                         }
-                        }
+
+//                        }
         }
     }
 
@@ -129,7 +156,7 @@ fn main() {
         // Start a new task to handle the each connection
         let child_chan = chan.clone();
         let child_add_vec = add_vec.clone();
-        let child_add_pvec = add_pvec.clone();
+//        let child_add_pvec = add_pvec.clone();
 	let write_count = count_arc.clone();
         
 	do spawn {
@@ -142,7 +169,7 @@ fn main() {
         let mut dstream = stream.take();            
             let mut buf = [0, ..500];
             dstream.read(buf);
-            let mut clostream = Cell::new(dstream);
+            let clostream = Cell::new(dstream);
 	    let request_str = str::from_utf8(buf);
             
             let req_group : ~[&str]= request_str.splitn_iter(' ', 3).collect();
@@ -171,20 +198,20 @@ fn main() {
                     // Requests scheduling
                     println("not default");
 			
-		        let mut ostream = clostream.take().unwrap();
+		        let ostream = clostream.take().unwrap();
 			//let msgcell = Cell::new(ostream);
-			let mut matchstream = ostream.peer_name().unwrap().to_str(); //need the ip address of peer
+//			let matchstream = ostream.peer_name().unwrap().to_str(); //need the ip address of peer
 			let msg: sched_msg = sched_msg{stream:Some(ostream),filepath: file_path.clone()};//
 		    
                	     let (sm_port, sm_chan) = std::comm::stream();
                     sm_chan.send(msg);
-				if(ip_parser(matchstream)){
-                                                do 					child_add_pvec.write |pvec| {
+				//if(ip_parser(matchstream)){
+                                                do 					child_add_vec.write |vec| {
                                     let msg = sm_port.recv();
-                                    (*pvec).push(msg); // enqueue new request.
+                                    (*vec).push(msg); // enqueue new request.
                                     println("add to priority queue");
                                         }//end do
-				}//end if 
+			/*	}//end if 
 				else {
 	                             
         	                        do child_add_vec.write |vec| {
@@ -192,7 +219,7 @@ fn main() {
                         	           (*vec).push(msg); // enqueue new request.
                                 	    println("add to queue");
                                 	}//end do
-                                }//end else
+                                }//end else*/
 
                     		child_chan.send(""); //notify the new arriving request.
                 		    println(fmt!("get file request: %?", file_path));       
