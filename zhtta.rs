@@ -94,11 +94,20 @@ fn main() {
     // dequeue file requests, and send responses.
     do spawn {
         let (sm_port, sm_chan) = stream();
-        let edit_map = map_arc.clone();
-        // a task for sending responses.
-        do spawn {
-            loop {
-                let mut tf: sched_msg = sm_port.recv(); // wait for the dequeued request to handle
+
+			loop {
+		        port.recv(); 
+		        do take_vec.write |vec| {
+		            if ((*vec).len() > 0) {
+println(fmt!("queue size before popping: %u", (*vec).len()));
+		                let tf_opt: Option<sched_msg> = Some((*vec).pop());
+					    println(fmt!("queue size after popping: %u", (*vec).len()));
+						let tf_cell=Cell::new(tf_opt.unwrap());
+		                sm_chan.send(tf_cell.take()); // send the request to send-response-task to serve.
+					}//capacity
+		        }//end write
+	               	
+				let mut tf: sched_msg = sm_port.recv(); // wait for the dequeued request to handle
                 match io::read_whole_file(tf.filepath) { // killed if file size is larger than memory size.
                     Ok(file_data) => {
 		//caching	
@@ -151,7 +160,7 @@ fn main() {
 	println("This is the response: "+response);		
 	tf.stream.write(response.as_bytes());
 					}//end if contains
-		
+			let edit_map = map_arc.clone();
 			let ref filepath = tf.filepath;
 			let mut file_content=~"";
 			let file_path = &Path(filepath.to_str());
@@ -174,21 +183,13 @@ fn main() {
 			},//ok
                         Err(err) => {println(err);}
                     }//match on too big?
- 
-        }//loop
-	}//spawn
-        loop {
-            port.recv(); 
-            do take_vec.write |vec| {
-                            if ((*vec).len() > 0) {
-                                let tf_opt: Option<sched_msg> = Some((*vec).pop());
-			        println(fmt!("queue size: %ud", (*vec).len()));
-				let tf_cell=Cell::new(tf_opt.unwrap());
-                                sm_chan.send(tf_cell.take()); // send the request to send-response-task to serve.
-			}//capacity
-                            }//end write
-	               	
+
+
 			}//loop
+
+
+        
+        
   		
 }//spawn
 

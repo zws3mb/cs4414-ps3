@@ -1,4 +1,4 @@
 all: zhtta
 
 zhtta: 
-	rustc zhtta.rs
+        rustc zhtta.rs
