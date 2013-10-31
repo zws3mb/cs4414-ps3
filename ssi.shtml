@@ -1,0 +1,10 @@
+<doctype !html>
+<html>
+<head></head>
+<body>
+	<pre>
+	<p>Stuff goes after this!</p>
+	<!--#exec cmd="ls" -->
+	</pre>
+</body>
+</html>
