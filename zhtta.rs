@@ -41,15 +41,15 @@ static visitor_count: uint = 0;
 //static map: hashmap::HashMap<~str, ~str> = hashmap::HashMap::new();
 
 fn ip_parser(ip : ~str)->bool{
-	println("Inside function: "+ip);
-	let ip_str = ip.to_str();
-	let ip_split: ~[&str]=ip_str.split_str_iter(".").collect();
-	if((ip_split[0]=="127" && ip_split[1]=="0") || (ip_split[0]=="128" && ip_split[1]=="143") || (ip_split[0]=="137" && ip_split[1]=="54")){
+//	println("Inside function: "+ip);
+//	let ip_str = ip.to_str();
+//	let ip_split: ~[&str]=ip_str.split_str_iter(".").collect();
+//	if((ip_split[0]=="127" && ip_split[1]=="0") || (ip_split[0]=="128" && ip_split[1]=="143") || (ip_split[0]=="137" && ip_split[1]=="54")){
 		return true;
-	}
-        else{
-		return false;	
-	}
+//	}
+//        else{
+//		return false;	
+//	}
 }//ip_parser
 
 struct sched_msg {
